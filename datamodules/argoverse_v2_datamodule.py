@@ -18,6 +18,8 @@ from torch_geometric.loader import DataLoader
 
 from datasets import ArgoverseV2Dataset
 from transforms import TargetBuilder
+from torch.utils.data import Subset
+import numpy as np
 
 
 class ArgoverseV2DataModule(pl.LightningDataModule):
@@ -65,9 +67,23 @@ class ArgoverseV2DataModule(pl.LightningDataModule):
         ArgoverseV2Dataset(self.root, 'val', self.val_raw_dir, self.val_processed_dir, self.val_transform)
         ArgoverseV2Dataset(self.root, 'test', self.test_raw_dir, self.test_processed_dir, self.test_transform)
 
-    def setup(self, stage: Optional[str] = None) -> None:
-        self.train_dataset = ArgoverseV2Dataset(self.root, 'train', self.train_raw_dir, self.train_processed_dir,
+    # def setup(self, stage: Optional[str] = None) -> None:
+    #     self.train_dataset = ArgoverseV2Dataset(self.root, 'train', self.train_raw_dir, self.train_processed_dir,
+    #                                             self.train_transform)
+    #     self.val_dataset = ArgoverseV2Dataset(self.root, 'val', self.val_raw_dir, self.val_processed_dir,
+    #                                           self.val_transform)
+    #     self.test_dataset = ArgoverseV2Dataset(self.root, 'test', self.test_raw_dir, self.test_processed_dir,
+    #                                            self.test_transform)
+    def setup(self, stage: Optional[str] = None, ratio = 0.2) -> None:
+        full_train_dataset = ArgoverseV2Dataset(self.root, 'train', self.train_raw_dir, self.train_processed_dir,
                                                 self.train_transform)
+        train_indices = np.arange(len(full_train_dataset))
+        np.random.seed(2023)
+        np.random.shuffle(train_indices)
+        sampled_indices = train_indices[:int(ratio * len(train_indices))]
+        print(f"Full training dataset length: {len(full_train_dataset)}")
+        print(f"Sampled training dataset length: {len(sampled_indices)}")
+        self.train_dataset = Subset(full_train_dataset, sampled_indices)
         self.val_dataset = ArgoverseV2Dataset(self.root, 'val', self.val_raw_dir, self.val_processed_dir,
                                               self.val_transform)
         self.test_dataset = ArgoverseV2Dataset(self.root, 'test', self.test_raw_dir, self.test_processed_dir,
