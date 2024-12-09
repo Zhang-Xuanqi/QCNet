@@ -37,20 +37,22 @@ class QCNetEncoder(nn.Module):
                  num_agent_layers: int,
                  num_heads: int,
                  head_dim: int,
-                 dropout: float) -> None:
+                 dropout: float,
+                 use_map) -> None:
         super(QCNetEncoder, self).__init__()
-        self.map_encoder = QCNetMapEncoder(
-            dataset=dataset,
-            input_dim=input_dim,
-            hidden_dim=hidden_dim,
-            num_historical_steps=num_historical_steps,
-            pl2pl_radius=pl2pl_radius,
-            num_freq_bands=num_freq_bands,
-            num_layers=num_map_layers,
-            num_heads=num_heads,
-            head_dim=head_dim,
-            dropout=dropout,
-        )
+        if use_map:
+            self.map_encoder = QCNetMapEncoder(
+                dataset=dataset,
+                input_dim=input_dim,
+                hidden_dim=hidden_dim,
+                num_historical_steps=num_historical_steps,
+                pl2pl_radius=pl2pl_radius,
+                num_freq_bands=num_freq_bands,
+                num_layers=num_map_layers,
+                num_heads=num_heads,
+                head_dim=head_dim,
+                dropout=dropout,
+            )
         self.agent_encoder = QCNetAgentEncoder(
             dataset=dataset,
             input_dim=input_dim,
@@ -64,9 +66,16 @@ class QCNetEncoder(nn.Module):
             num_heads=num_heads,
             head_dim=head_dim,
             dropout=dropout,
+            use_map=use_map
         )
+        self.use_map = use_map
 
     def forward(self, data: HeteroData) -> Dict[str, torch.Tensor]:
-        map_enc = self.map_encoder(data)
-        agent_enc = self.agent_encoder(data, map_enc)
-        return {**map_enc, **agent_enc}
+        if self.use_map:
+            map_enc = self.map_encoder(data)
+            agent_enc = self.agent_encoder(data, map_enc)
+            return {**map_enc, **agent_enc}
+        else:
+            print("Encoding agent only")
+            agent_enc = self.agent_encoder(data, None)
+            return {**agent_enc}

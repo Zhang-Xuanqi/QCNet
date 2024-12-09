@@ -51,7 +51,8 @@ class QCNetDecoder(nn.Module):
                  num_layers: int,
                  num_heads: int,
                  head_dim: int,
-                 dropout: float) -> None:
+                 dropout: float,
+                 use_map: bool) -> None:
         super(QCNetDecoder, self).__init__()
         self.dataset = dataset
         self.input_dim = input_dim
@@ -70,6 +71,7 @@ class QCNetDecoder(nn.Module):
         self.num_heads = num_heads
         self.head_dim = head_dim
         self.dropout = dropout
+        self.use_map = use_map
 
         input_dim_r_t = 4
         input_dim_r_pl2m = 3
@@ -77,8 +79,6 @@ class QCNetDecoder(nn.Module):
 
         self.mode_emb = nn.Embedding(num_modes, hidden_dim)
         self.r_t2m_emb = FourierEmbedding(input_dim=input_dim_r_t, hidden_dim=hidden_dim, num_freq_bands=num_freq_bands)
-        self.r_pl2m_emb = FourierEmbedding(input_dim=input_dim_r_pl2m, hidden_dim=hidden_dim,
-                                           num_freq_bands=num_freq_bands)
         self.r_a2m_emb = FourierEmbedding(input_dim=input_dim_r_a2m, hidden_dim=hidden_dim,
                                           num_freq_bands=num_freq_bands)
         self.y_emb = FourierEmbedding(input_dim=output_dim + output_head, hidden_dim=hidden_dim,
@@ -86,34 +86,37 @@ class QCNetDecoder(nn.Module):
         self.traj_emb = nn.GRU(input_size=hidden_dim, hidden_size=hidden_dim, num_layers=1, bias=True,
                                batch_first=False, dropout=0.0, bidirectional=False)
         self.traj_emb_h0 = nn.Parameter(torch.zeros(1, hidden_dim))
-        self.t2m_propose_attn_layers = nn.ModuleList(
-            [AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim, dropout=dropout,
-                            bipartite=True, has_pos_emb=True) for _ in range(num_layers)]
-        )
-        self.pl2m_propose_attn_layers = nn.ModuleList(
-            [AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim, dropout=dropout,
-                            bipartite=True, has_pos_emb=True) for _ in range(num_layers)]
-        )
-        self.a2m_propose_attn_layers = nn.ModuleList(
-            [AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim, dropout=dropout,
-                            bipartite=True, has_pos_emb=True) for _ in range(num_layers)]
-        )
-        self.m2m_propose_attn_layer = AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim,
-                                                     dropout=dropout, bipartite=False, has_pos_emb=False)
-        self.t2m_refine_attn_layers = nn.ModuleList(
-            [AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim, dropout=dropout,
-                            bipartite=True, has_pos_emb=True) for _ in range(num_layers)]
-        )
-        self.pl2m_refine_attn_layers = nn.ModuleList(
-            [AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim, dropout=dropout,
-                            bipartite=True, has_pos_emb=True) for _ in range(num_layers)]
-        )
-        self.a2m_refine_attn_layers = nn.ModuleList(
-            [AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim, dropout=dropout,
-                            bipartite=True, has_pos_emb=True) for _ in range(num_layers)]
-        )
-        self.m2m_refine_attn_layer = AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim,
-                                                    dropout=dropout, bipartite=False, has_pos_emb=False)
+        if self.use_map:
+            self.r_pl2m_emb = FourierEmbedding(input_dim=input_dim_r_pl2m, hidden_dim=hidden_dim,
+                                           num_freq_bands=num_freq_bands)
+            self.t2m_propose_attn_layers = nn.ModuleList(
+                [AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim, dropout=dropout,
+                                bipartite=True, has_pos_emb=True) for _ in range(num_layers)]
+            )
+            self.pl2m_propose_attn_layers = nn.ModuleList(
+                [AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim, dropout=dropout,
+                                bipartite=True, has_pos_emb=True) for _ in range(num_layers)]
+            )
+            self.a2m_propose_attn_layers = nn.ModuleList(
+                [AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim, dropout=dropout,
+                                bipartite=True, has_pos_emb=True) for _ in range(num_layers)]
+            )
+            self.t2m_refine_attn_layers = nn.ModuleList(
+                [AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim, dropout=dropout,
+                                bipartite=True, has_pos_emb=True) for _ in range(num_layers)]
+            )
+            self.pl2m_refine_attn_layers = nn.ModuleList(
+                [AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim, dropout=dropout,
+                                bipartite=True, has_pos_emb=True) for _ in range(num_layers)]
+            )
+            self.a2m_refine_attn_layers = nn.ModuleList(
+                [AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim, dropout=dropout,
+                                bipartite=True, has_pos_emb=True) for _ in range(num_layers)]
+            )
+            self.m2m_propose_attn_layer = AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim,
+                                                        dropout=dropout, bipartite=False, has_pos_emb=False)
+            self.m2m_refine_attn_layer = AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim,
+                                                        dropout=dropout, bipartite=False, has_pos_emb=False)
         self.to_loc_propose_pos = MLPLayer(input_dim=hidden_dim, hidden_dim=hidden_dim,
                                            output_dim=num_future_steps * output_dim // num_recurrent_steps)
         self.to_scale_propose_pos = MLPLayer(input_dim=hidden_dim, hidden_dim=hidden_dim,
@@ -145,11 +148,13 @@ class QCNetDecoder(nn.Module):
         head_m = data['agent']['heading'][:, self.num_historical_steps - 1]
         head_vector_m = torch.stack([head_m.cos(), head_m.sin()], dim=-1)
 
-        x_t = scene_enc['x_a'].reshape(-1, self.hidden_dim)
-        x_pl = scene_enc['x_pl'][:, self.num_historical_steps - 1].repeat(self.num_modes, 1)
-        x_a = scene_enc['x_a'][:, -1].repeat(self.num_modes, 1)
-        m = self.mode_emb.weight.repeat(scene_enc['x_a'].size(0), 1)
-
+        if self.use_map and scene_enc:
+            x_t = scene_enc['x_a'].reshape(-1, self.hidden_dim)
+            x_pl = scene_enc['x_pl'][:, self.num_historical_steps - 1].repeat(self.num_modes, 1)
+            x_a = scene_enc['x_a'][:, -1].repeat(self.num_modes, 1)
+            m = self.mode_emb.weight.repeat(scene_enc['x_a'].size(0), 1)
+        else:
+            m = self.mode_emb.weight.repeat(pos_m.size(0), 1)
         mask_src = data['agent']['valid_mask'][:, :self.num_historical_steps].contiguous()
         mask_src[:, :self.num_historical_steps - self.num_t2m_steps] = False
         mask_dst = data['agent']['predict_mask'].any(dim=-1, keepdim=True).repeat(1, self.num_modes)
@@ -168,26 +173,27 @@ class QCNetDecoder(nn.Module):
         edge_index_t2m = bipartite_dense_to_sparse(mask_src.unsqueeze(2) & mask_dst.unsqueeze(1))
         r_t2m = r_t2m.repeat_interleave(repeats=self.num_modes, dim=0)
 
-        pos_pl = data['map_polygon']['position'][:, :self.input_dim]
-        orient_pl = data['map_polygon']['orientation']
-        edge_index_pl2m = radius(
-            x=pos_m[:, :2],
-            y=pos_pl[:, :2],
-            r=self.pl2m_radius,
-            batch_x=data['agent']['batch'] if isinstance(data, Batch) else None,
-            batch_y=data['map_polygon']['batch'] if isinstance(data, Batch) else None,
-            max_num_neighbors=300)
-        edge_index_pl2m = edge_index_pl2m[:, mask_dst[edge_index_pl2m[1], 0]]
-        rel_pos_pl2m = pos_pl[edge_index_pl2m[0]] - pos_m[edge_index_pl2m[1]]
-        rel_orient_pl2m = wrap_angle(orient_pl[edge_index_pl2m[0]] - head_m[edge_index_pl2m[1]])
-        r_pl2m = torch.stack(
-            [torch.norm(rel_pos_pl2m[:, :2], p=2, dim=-1),
-             angle_between_2d_vectors(ctr_vector=head_vector_m[edge_index_pl2m[1]], nbr_vector=rel_pos_pl2m[:, :2]),
-             rel_orient_pl2m], dim=-1)
-        r_pl2m = self.r_pl2m_emb(continuous_inputs=r_pl2m, categorical_embs=None)
-        edge_index_pl2m = torch.cat([edge_index_pl2m + i * edge_index_pl2m.new_tensor(
-            [[data['map_polygon']['num_nodes']], [data['agent']['num_nodes']]]) for i in range(self.num_modes)], dim=1)
-        r_pl2m = r_pl2m.repeat(self.num_modes, 1)
+        if self.use_map:
+            pos_pl = data['map_polygon']['position'][:, :self.input_dim]
+            orient_pl = data['map_polygon']['orientation']
+            edge_index_pl2m = radius(
+                x=pos_m[:, :2],
+                y=pos_pl[:, :2],
+                r=self.pl2m_radius,
+                batch_x=data['agent']['batch'] if isinstance(data, Batch) else None,
+                batch_y=data['map_polygon']['batch'] if isinstance(data, Batch) else None,
+                max_num_neighbors=300)
+            edge_index_pl2m = edge_index_pl2m[:, mask_dst[edge_index_pl2m[1], 0]]
+            rel_pos_pl2m = pos_pl[edge_index_pl2m[0]] - pos_m[edge_index_pl2m[1]]
+            rel_orient_pl2m = wrap_angle(orient_pl[edge_index_pl2m[0]] - head_m[edge_index_pl2m[1]])
+            r_pl2m = torch.stack(
+                [torch.norm(rel_pos_pl2m[:, :2], p=2, dim=-1),
+                angle_between_2d_vectors(ctr_vector=head_vector_m[edge_index_pl2m[1]], nbr_vector=rel_pos_pl2m[:, :2]),
+                rel_orient_pl2m], dim=-1)
+            r_pl2m = self.r_pl2m_emb(continuous_inputs=r_pl2m, categorical_embs=None)
+            edge_index_pl2m = torch.cat([edge_index_pl2m + i * edge_index_pl2m.new_tensor(
+                [[data['map_polygon']['num_nodes']], [data['agent']['num_nodes']]]) for i in range(self.num_modes)], dim=1)
+            r_pl2m = r_pl2m.repeat(self.num_modes, 1)
 
         edge_index_a2m = radius_graph(
             x=pos_m[:, :2],
@@ -215,14 +221,15 @@ class QCNetDecoder(nn.Module):
         locs_propose_head: List[Optional[torch.Tensor]] = [None] * self.num_recurrent_steps
         concs_propose_head: List[Optional[torch.Tensor]] = [None] * self.num_recurrent_steps
         for t in range(self.num_recurrent_steps):
-            for i in range(self.num_layers):
-                m = m.reshape(-1, self.hidden_dim)
-                m = self.t2m_propose_attn_layers[i]((x_t, m), r_t2m, edge_index_t2m)
-                m = m.reshape(-1, self.num_modes, self.hidden_dim).transpose(0, 1).reshape(-1, self.hidden_dim)
-                m = self.pl2m_propose_attn_layers[i]((x_pl, m), r_pl2m, edge_index_pl2m)
-                m = self.a2m_propose_attn_layers[i]((x_a, m), r_a2m, edge_index_a2m)
-                m = m.reshape(self.num_modes, -1, self.hidden_dim).transpose(0, 1).reshape(-1, self.hidden_dim)
-            m = self.m2m_propose_attn_layer(m, None, edge_index_m2m)
+            if self.use_map:
+                for i in range(self.num_layers):
+                    m = m.reshape(-1, self.hidden_dim)
+                    m = self.t2m_propose_attn_layers[i]((x_t, m), r_t2m, edge_index_t2m)
+                    m = m.reshape(-1, self.num_modes, self.hidden_dim).transpose(0, 1).reshape(-1, self.hidden_dim)
+                    m = self.pl2m_propose_attn_layers[i]((x_pl, m), r_pl2m, edge_index_pl2m)
+                    m = self.a2m_propose_attn_layers[i]((x_a, m), r_a2m, edge_index_a2m)
+                    m = m.reshape(self.num_modes, -1, self.hidden_dim).transpose(0, 1).reshape(-1, self.hidden_dim)
+                m = self.m2m_propose_attn_layer(m, None, edge_index_m2m)
             m = m.reshape(-1, self.num_modes, self.hidden_dim)
             locs_propose_pos[t] = self.to_loc_propose_pos(m)
             scales_propose_pos[t] = self.to_scale_propose_pos(m)
@@ -253,13 +260,14 @@ class QCNetDecoder(nn.Module):
             m = self.y_emb(loc_propose_pos.detach().view(-1, self.output_dim))
         m = m.reshape(-1, self.num_future_steps, self.hidden_dim).transpose(0, 1)
         m = self.traj_emb(m, self.traj_emb_h0.unsqueeze(1).repeat(1, m.size(1), 1))[1].squeeze(0)
-        for i in range(self.num_layers):
-            m = self.t2m_refine_attn_layers[i]((x_t, m), r_t2m, edge_index_t2m)
-            m = m.reshape(-1, self.num_modes, self.hidden_dim).transpose(0, 1).reshape(-1, self.hidden_dim)
-            m = self.pl2m_refine_attn_layers[i]((x_pl, m), r_pl2m, edge_index_pl2m)
-            m = self.a2m_refine_attn_layers[i]((x_a, m), r_a2m, edge_index_a2m)
-            m = m.reshape(self.num_modes, -1, self.hidden_dim).transpose(0, 1).reshape(-1, self.hidden_dim)
-        m = self.m2m_refine_attn_layer(m, None, edge_index_m2m)
+        if self.use_map:
+            for i in range(self.num_layers):
+                m = self.t2m_refine_attn_layers[i]((x_t, m), r_t2m, edge_index_t2m)
+                m = m.reshape(-1, self.num_modes, self.hidden_dim).transpose(0, 1).reshape(-1, self.hidden_dim)
+                m = self.pl2m_refine_attn_layers[i]((x_pl, m), r_pl2m, edge_index_pl2m)
+                m = self.a2m_refine_attn_layers[i]((x_a, m), r_a2m, edge_index_a2m)
+                m = m.reshape(self.num_modes, -1, self.hidden_dim).transpose(0, 1).reshape(-1, self.hidden_dim)
+            m = self.m2m_refine_attn_layer(m, None, edge_index_m2m)
         m = m.reshape(-1, self.num_modes, self.hidden_dim)
         loc_refine_pos = self.to_loc_refine_pos(m).view(-1, self.num_modes, self.num_future_steps, self.output_dim)
         loc_refine_pos = loc_refine_pos + loc_propose_pos.detach()

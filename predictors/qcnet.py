@@ -71,6 +71,7 @@ class QCNet(pl.LightningModule):
                  T_max: int,
                  submission_dir: str,
                  submission_file_name: str,
+                 use_map: bool,
                  **kwargs) -> None:
         super(QCNet, self).__init__()
         self.save_hyperparameters()
@@ -102,6 +103,7 @@ class QCNet(pl.LightningModule):
         self.T_max = T_max
         self.submission_dir = submission_dir
         self.submission_file_name = submission_file_name
+        self.use_map = use_map
 
         self.encoder = QCNetEncoder(
             dataset=dataset,
@@ -118,6 +120,7 @@ class QCNet(pl.LightningModule):
             num_heads=num_heads,
             head_dim=head_dim,
             dropout=dropout,
+            use_map=use_map
         )
         self.decoder = QCNetDecoder(
             dataset=dataset,
@@ -137,6 +140,7 @@ class QCNet(pl.LightningModule):
             num_heads=num_heads,
             head_dim=head_dim,
             dropout=dropout,
+            use_map=use_map
         )
 
         self.reg_loss = NLLLoss(component_distribution=['laplace'] * output_dim + ['von_mises'] * output_head,
@@ -154,8 +158,11 @@ class QCNet(pl.LightningModule):
         self.test_predictions = dict()
 
     def forward(self, data: HeteroData):
-        scene_enc = self.encoder(data)
-        pred = self.decoder(data, scene_enc)
+        if self.use_map:
+            scene_enc = self.encoder(data)
+            pred = self.decoder(data, scene_enc)
+        else:
+            pred = self.decoder(data, None)
         return pred
 
     def training_step(self,

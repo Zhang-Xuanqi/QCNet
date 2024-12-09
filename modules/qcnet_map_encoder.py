@@ -99,6 +99,7 @@ class QCNetMapEncoder(nn.Module):
         orient_pl = data['map_polygon']['orientation'].contiguous()
         orient_vector_pl = torch.stack([orient_pl.cos(), orient_pl.sin()], dim=-1)
 
+        # 处理 magnitude
         if self.dataset == 'argoverse_v2':
             if self.input_dim == 2:
                 x_pt = data['map_point']['magnitude'].unsqueeze(-1)
@@ -117,6 +118,7 @@ class QCNetMapEncoder(nn.Module):
         x_pt = self.x_pt_emb(continuous_inputs=x_pt, categorical_embs=x_pt_categorical_embs)
         x_pl = self.x_pl_emb(continuous_inputs=x_pl, categorical_embs=x_pl_categorical_embs)
 
+        # 处理 point to polygon 特征
         edge_index_pt2pl = data['map_point', 'to', 'map_polygon']['edge_index']
         rel_pos_pt2pl = pos_pt[edge_index_pt2pl[0]] - pos_pl[edge_index_pt2pl[1]]
         rel_orient_pt2pl = wrap_angle(orient_pt[edge_index_pt2pl[0]] - orient_pl[edge_index_pt2pl[1]])
@@ -137,6 +139,7 @@ class QCNetMapEncoder(nn.Module):
             raise ValueError('{} is not a valid dimension'.format(self.input_dim))
         r_pt2pl = self.r_pt2pl_emb(continuous_inputs=r_pt2pl, categorical_embs=None)
 
+        # 处理 polygon to polygon 特征
         edge_index_pl2pl = data['map_polygon', 'to', 'map_polygon']['edge_index']
         edge_index_pl2pl_radius = radius_graph(x=pos_pl[:, :2], r=self.pl2pl_radius,
                                                batch=data['map_polygon']['batch'] if isinstance(data, Batch) else None,

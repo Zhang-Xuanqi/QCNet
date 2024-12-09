@@ -42,6 +42,7 @@ if __name__ == '__main__':
     parser.add_argument('--accelerator', type=str, default='auto')
     parser.add_argument('--devices', type=int, required=True)
     parser.add_argument('--max_epochs', type=int, default=64)
+    parser.add_argument('--use_map', type=bool, default=False)
     QCNet.add_model_specific_args(parser)
     args = parser.parse_args()
 
